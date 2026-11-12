@@ -9,6 +9,7 @@ Everything is stored locally on your device.
 - Drag, link and pan tools with undo / redo
 - Multiple boards, saved automatically in local storage
 - Android app built from the same code
+- Full view mode (hides status and navigation bars) with an on-screen toggle
 
 ## Keyboard shortcuts
 

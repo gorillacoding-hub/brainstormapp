@@ -40,6 +40,12 @@ jobs:
       - name: Add Android project
         run: |
           npx cap add android
+
+      - name: Add native full-view support
+        run: |
+          TARGET=android/app/src/main/java/com/gorillacoding/filament/MainActivity.java
+          test -f "$TARGET"
+          cp native/MainActivity.java "$TARGET"
           npx cap sync android
 
       - name: Set app version

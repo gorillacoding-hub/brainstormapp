@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Hint, Inspector, Toolbar, TopBar, Welcome, ZoomHud } from "@/components/brainstorm/chrome";
 import { BoardStage } from "@/components/brainstorm/stage";
+import { FullscreenToggle } from "@/components/brainstorm/fullscreen-toggle";
 import { spawnAround } from "@/lib/brainstorm/geometry";
 import { persistStudio, readView, useStudio } from "@/lib/brainstorm/store";
 
@@ -98,6 +99,7 @@ export function Studio() {
       <TopBar />
       <Toolbar />
       <ZoomHud />
+      <FullscreenToggle />
       <Hint />
       <Inspector editingId={editingId} setEditingId={setEditingId} dragging={dragging} />
       <Welcome setEditingId={setEditingId} />
