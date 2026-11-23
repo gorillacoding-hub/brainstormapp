@@ -1,0 +1,20 @@
+Filament is a visual brainstorming canvas for organizing ideas and
+connecting them into clear diagrams. Everything is stored locally
+on your device.
+
+FEATURES
+
+• Four board templates: Free, Boxes, Circles, and Tree.
+• Create, move, connect, and organize ideas on a flexible canvas.
+• Multiple boards with automatic saving.
+• Undo and redo.
+• Ten colors for boxes and circles.
+• Customize arrow colors, including blended colors where arrows
+  meet.
+• Choose 2D or 3D arrows and customize the background.
+• Free mode or Logic mode with grid alignment and optional guide
+  lines.
+• Export boards as vector SVG or high-definition JPG images.
+• Full view mode to give your canvas more screen space.
+
+Filament keeps your brainstorming boards on your device.
