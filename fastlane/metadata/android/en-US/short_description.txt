@@ -1,1 +1,1 @@
-A private, local-first canvas for visual brainstorming
+Private, local-first visual brainstorming canvas
