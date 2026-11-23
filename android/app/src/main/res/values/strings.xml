@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Filament</string>
+    <string name="title_activity_main">Filament</string>
+    <string name="package_name">com.gorillacoding.filament</string>
+    <string name="custom_url_scheme">com.gorillacoding.filament</string>
+</resources>

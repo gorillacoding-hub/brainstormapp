@@ -1,0 +1,21 @@
+def repoRoot = new File(settingsDir, '..')
+def nodeModulesDir = new File(repoRoot, 'node_modules')
+def capacitorAndroidDir = new File(nodeModulesDir, '@capacitor/android/capacitor')
+
+if (!capacitorAndroidDir.exists()) {
+    logger.lifecycle('[F-Droid] Installing npm dependencies...')
+    def result = exec {
+        workingDir repoRoot
+        commandLine 'npm', 'ci', '--no-audit', '--no-fund'
+        ignoreExitValue = true
+    }
+    if (result.exitValue != 0) {
+        throw new GradleException('npm ci failed. Node.js and npm must be installed.')
+    }
+}
+
+include ':app'
+include ':capacitor-cordova-android-plugins'
+project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
+
+apply from: 'capacitor.settings.gradle'

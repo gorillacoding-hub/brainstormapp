@@ -37,10 +37,6 @@ jobs:
       - name: Build web app
         run: npm run build
 
-      - name: Add Android project
-        run: |
-          npx cap add android
-
       - name: Add native full-view support
         run: |
           TARGET=android/app/src/main/java/com/gorillacoding/filament/MainActivity.java
@@ -48,17 +44,11 @@ jobs:
           cp native/MainActivity.java "$TARGET"
           npx cap sync android
 
-      - name: Set app version
-        run: |
-          sed -i "s/versionCode 1/versionCode ${{ github.run_number }}/" android/app/build.gradle
-          sed -i "s/versionName \"1.0\"/versionName \"${TAG#v}\"/" android/app/build.gradle
-          grep -n "versionCode\|versionName" android/app/build.gradle
-
       - name: Build release APK
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon --stacktrace
+          ./gradlew assembleRelease --no-daemon --stacktrace -PversionCodeOverride=${{ github.run_number }} -PversionNameOverride="${TAG#v}"
 
       - name: Align and sign APK
         env:

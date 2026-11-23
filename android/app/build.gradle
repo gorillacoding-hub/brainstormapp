@@ -1,0 +1,77 @@
+apply plugin: 'com.android.application'
+
+def repoRoot = rootProject.file('..')
+
+def packageJson = new groovy.json.JsonSlurper().parseText(
+    new File(repoRoot, 'package.json').text
+)
+def pkgVersion = packageJson.version
+def versionParts = pkgVersion.tokenize('.').collect { it.toInteger() }
+def pkgVersionCode = versionParts[0] * 10000 + versionParts[1] * 100 + versionParts[2]
+def buildVersionCode = project.findProperty('versionCodeOverride')?.toString()?.toInteger() ?: pkgVersionCode
+def buildVersionName = project.findProperty('versionNameOverride')?.toString() ?: pkgVersion
+
+def buildWeb = tasks.register('buildWebAssets', Exec) {
+    workingDir repoRoot
+    commandLine 'npm', 'run', 'build'
+}
+
+def syncCapacitor = tasks.register('syncCapacitor', Exec) {
+    dependsOn buildWeb
+    workingDir repoRoot
+    commandLine 'npx', '--no-install', 'cap', 'sync', 'android'
+}
+
+android {
+    namespace "com.gorillacoding.filament"
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId "com.gorillacoding.filament"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode buildVersionCode
+        versionName buildVersionName
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        aaptOptions {
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = false
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn syncCapacitor
+}
+
+repositories {
+    flatDir {
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
