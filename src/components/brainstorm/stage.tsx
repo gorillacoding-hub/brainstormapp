@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   clamp,
   clientToWorld,
@@ -24,7 +24,8 @@ import {
 } from "@/lib/brainstorm/arrows";
 import { isLight, mixTwo } from "@/lib/brainstorm/color";
 import { GUIDE_SLOT, LOGIC_CELL } from "@/lib/brainstorm/layout";
-import { COPPER, toneOf } from "@/lib/brainstorm/types";
+import { fitFont } from "@/lib/brainstorm/fit";
+import { COPPER, MAX_TEXT, toneOf } from "@/lib/brainstorm/types";
 import type { ArrowStyle, Camera, Idea, Port } from "@/lib/brainstorm/types";
 
 type Session =
@@ -77,6 +78,22 @@ export function BoardStage({
   const [cursor, setCursor] = useState<Point | null>(null);
   const [snap, setSnap] = useState<{ id: string; port: Port } | null>(null);
   const [panning, setPanning] = useState(false);
+  const [fontRev, setFontRev] = useState(0);
+
+  // Web fonts load after first paint: measure again once they are in so boxes fit the real glyphs.
+  useEffect(() => {
+    const fonts = document.fonts;
+    if (!fonts?.ready) return;
+    let alive = true;
+    fonts.ready.then(() => {
+      if (!alive) return;
+      useStudio.getState().refitAll();
+      setFontRev((n) => n + 1);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const board = useStudio((s) => s.boards.find((item) => item.id === s.activeId) ?? s.boards[0]);
   const tool = useStudio((s) => s.tool);
@@ -423,7 +440,8 @@ export function BoardStage({
             selected={selection?.kind === "idea" && selection.id === idea.id}
             linking={linkDraft?.fromId === idea.id}
             editing={editingId === idea.id}
-            fit={idea.full === true && board.mode === "free"}
+            logic={board.mode === "logic"}
+            fontRev={fontRev}
             onEdit={(value) => {
               useStudio.getState().beginGesture();
               useStudio.getState().updateIdea(idea.id, { text: value });
@@ -584,7 +602,8 @@ function IdeaNode({
   selected,
   linking,
   editing,
-  fit,
+  logic,
+  fontRev,
   onEdit,
   onEditEnd,
   onHover,
@@ -593,7 +612,8 @@ function IdeaNode({
   selected: boolean;
   linking: boolean;
   editing: boolean;
-  fit: boolean;
+  logic: boolean;
+  fontRev: number;
   onEdit: (value: string) => void;
   onEditEnd: () => void;
   onHover: (id: string | null) => void;
@@ -610,6 +630,22 @@ function IdeaNode({
   const height = idea.shape === "circle" ? idea.w : idea.h;
   const tone = toneOf(idea.tone);
   const circle = idea.shape === "circle";
+
+  // Free mode: the container grows to fit the text, so text is never clipped.
+  // Logic mode: the container keeps one size, so the text shrinks to fit instead.
+  const fontPx = useMemo(
+    () => (logic && !idea.image ? fitFont(idea.text, idea.shape, idea.w, height) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logic, idea.image, idea.text, idea.shape, idea.w, height, fontRev],
+  );
+
+  // Keep the textarea exactly as tall as its text so it stays centred in the box / circle.
+  useEffect(() => {
+    const el = ref.current;
+    if (!editing || !el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [editing, idea.text, idea.w, fontPx]);
 
   return (
     <div
@@ -631,32 +667,47 @@ function IdeaNode({
       onPointerEnter={() => onHover(idea.id)}
       onPointerLeave={() => onHover(null)}
     >
-      <div
-        className={`flex h-full items-center justify-center text-center ${
-          circle ? (fit ? "p-0" : "px-5 py-4") : "px-4 py-3"
-        }`}
-      >
-        {editing ? (
-          <textarea
-            ref={ref}
-            value={idea.text}
-            maxLength={400}
-            placeholder="Write an idea"
-            aria-label="Idea text"
-            style={fit && circle ? { width: "72%" } : undefined}
-            onChange={(event) => onEdit(event.target.value)}
-            onBlur={onEditEnd}
-            onPointerDown={(event) => event.stopPropagation()}
+      {idea.image ? (
+        <div className="h-full w-full p-1.5">
+          <img
+            src={idea.image}
+            alt={idea.text || "Imported picture"}
+            draggable={false}
+            className="pointer-events-none block h-full w-full select-none rounded-[0.5rem] object-contain"
           />
-        ) : (
-          <p
-            className={`w-full break-words ${fit ? "" : selected ? "max-h-full overflow-auto" : "line-clamp-4"} ${idea.text ? "" : "opacity-45"}`}
-            style={fit ? { width: circle ? "72%" : "100%", whiteSpace: "pre-wrap" } : undefined}
-          >
-            {idea.text || "New idea"}
-          </p>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div
+          className={`flex h-full items-center justify-center text-center ${
+            circle ? "p-0" : "px-4 py-3"
+          }`}
+        >
+          {editing ? (
+            <textarea
+              ref={ref}
+              value={idea.text}
+              maxLength={MAX_TEXT}
+              placeholder="Write an idea"
+              aria-label="Idea text"
+              style={{ ...(circle ? { width: "72%" } : {}), ...(fontPx ? { fontSize: fontPx } : {}) }}
+              onChange={(event) => onEdit(event.target.value)}
+              onBlur={onEditEnd}
+              onPointerDown={(event) => event.stopPropagation()}
+            />
+          ) : (
+            <p
+              className={`break-words ${idea.text ? "" : "opacity-45"}`}
+              style={{
+                width: circle ? "72%" : "100%",
+                whiteSpace: "pre-wrap",
+                ...(fontPx ? { fontSize: fontPx } : {}),
+              }}
+            >
+              {idea.text || "New idea"}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

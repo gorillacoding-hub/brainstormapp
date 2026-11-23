@@ -5,7 +5,7 @@ import {
   Circle,
   Copy,
   Hand,
-  Maximize2,
+  ImagePlus,
   Minus,
   MousePointer2,
   Plus,
@@ -19,6 +19,10 @@ import {
 import type { Template, Tool } from "@/lib/brainstorm/types";
 import { ARROW_COLORS, TEMPLATES, TONES } from "@/lib/brainstorm/types";
 import { readView, useStudio } from "@/lib/brainstorm/store";
+import { readPicture } from "@/lib/image";
+import { notify } from "@/lib/notice";
+import { spawnAround } from "@/lib/brainstorm/geometry";
+import { MAX_TEXT } from "@/lib/brainstorm/types";
 
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
@@ -225,6 +229,58 @@ function HistoryButtons() {
   );
 }
 
+/** Pick one or more pictures and drop each onto the board as a square that shows the whole image. */
+function PictureButton() {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onFiles(files: FileList | null) {
+    const list = files ? [...files] : [];
+    if (!list.length) return;
+    setBusy(true);
+    let failed = 0;
+    for (const file of list) {
+      try {
+        const image = await readPicture(file);
+        const state = useStudio.getState();
+        const board = state.active();
+        const at = spawnAround(board.camera, board.ideas.length);
+        state.addPicture(at.x, at.y, image);
+      } catch {
+        failed += 1;
+      }
+    }
+    setBusy(false);
+    if (failed) notify(failed === list.length ? "Could not import that picture." : `${failed} picture(s) could not be imported.`);
+    if (input.current) input.current.value = "";
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label="Import picture"
+        title="Import picture"
+        disabled={busy}
+        className="grid size-11 place-items-center rounded-xl text-ink hover:bg-elevated disabled:opacity-40"
+        onClick={() => input.current?.click()}
+      >
+        <ImagePlus className="size-5" />
+      </button>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        multiple
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden
+        onChange={(event) => void onFiles(event.target.files)}
+      />
+    </>
+  );
+}
+
 export function Toolbar() {
   const tool = useStudio((s) => s.tool);
   const template = useStudio((s) => s.active().template);
@@ -252,6 +308,7 @@ export function Toolbar() {
             </button>
           );
         })}
+        <PictureButton />
         {template === "free" && (
           <>
             <span className="mx-1 h-6 w-px bg-line md:mx-0 md:my-1 md:h-px md:w-6" aria-hidden />
@@ -433,11 +490,12 @@ export function Inspector({
 
   const idea = board.ideas.find((item) => item.id === selection.id);
   if (!idea) return null;
+  const picture = Boolean(idea.image);
 
   return (
     <aside className="panel absolute inset-x-3 bottom-20 z-30 max-h-[62dvh] overflow-auto p-3 md:inset-x-auto md:right-3 md:bottom-auto md:top-[7.25rem] md:max-h-[calc(100dvh-9rem)] md:w-80">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-medium text-muted">{idea.shape === "circle" ? "Circle" : "Box"}</p>
+        <p className="text-xs font-medium text-muted">{picture ? "Picture" : idea.shape === "circle" ? "Circle" : "Box"}</p>
         <button
           type="button"
           className="text-xs font-medium text-muted"
@@ -449,67 +507,58 @@ export function Inspector({
           Close
         </button>
       </div>
-      <label className="sr-only" htmlFor="idea-text">
-        Idea text
-      </label>
-      <textarea
-        id="idea-text"
-        value={idea.text}
-        maxLength={400}
-        rows={3}
-        placeholder="Write an idea"
-        className="mt-2 w-full resize-none rounded-xl bg-elevated px-3 py-2.5 text-sm leading-relaxed text-ink ring-1 ring-line"
-        onFocus={() => setEditingId(idea.id)}
-        onChange={(event) => {
-          if (editingId !== idea.id) setEditingId(idea.id);
-          useStudio.getState().beginGesture();
-          useStudio.getState().updateIdea(idea.id, { text: event.target.value });
-        }}
-        onBlur={() => useStudio.getState().endGesture()}
-      />
-      <div className="mt-3 flex items-center gap-2">
-        <div className="flex gap-1" role="group" aria-label="Shape">
-          <button
-            type="button"
-            aria-label="Box"
-            aria-pressed={idea.shape === "box"}
-            className={cx(
-              "grid size-11 place-items-center rounded-xl",
-              idea.shape === "box" ? "bg-copper text-copper-ink" : "bg-elevated text-ink",
-            )}
-            onClick={() => useStudio.getState().updateIdea(idea.id, { shape: "box" })}
-          >
-            <Square className="size-4" />
-          </button>
-          <button
-            type="button"
-            aria-label="Circle"
-            aria-pressed={idea.shape === "circle"}
-            className={cx(
-              "grid size-11 place-items-center rounded-xl",
-              idea.shape === "circle" ? "bg-copper text-copper-ink" : "bg-elevated text-ink",
-            )}
-            onClick={() => useStudio.getState().updateIdea(idea.id, { shape: "circle" })}
-          >
-            <Circle className="size-4" />
-          </button>
-        </div>
-        <button
-          type="button"
-          aria-pressed={idea.full === true}
-          disabled={board.mode === "logic"}
-          title={board.mode === "logic" ? "Full notes need Free mode" : "Grow the container so the whole note shows"}
-          className={cx(
-            "flex h-11 flex-1 items-center justify-center gap-2 rounded-xl text-sm font-medium disabled:opacity-40",
-            idea.full ? "bg-copper text-copper-ink" : "bg-elevated text-ink",
-          )}
-          onClick={() => useStudio.getState().updateIdea(idea.id, { full: !idea.full })}
-        >
-          <Maximize2 className="size-4" aria-hidden />
-          Full note
-        </button>
-      </div>
-      <div className="mt-3 grid grid-cols-5 gap-2" role="group" aria-label="Color">
+      {!picture && (
+        <>
+          <label className="sr-only" htmlFor="idea-text">
+            Idea text
+          </label>
+          <textarea
+            id="idea-text"
+            value={idea.text}
+            maxLength={MAX_TEXT}
+            rows={3}
+            placeholder="Write an idea"
+            className="mt-2 w-full resize-none rounded-xl bg-elevated px-3 py-2.5 text-sm leading-relaxed text-ink ring-1 ring-line"
+            onFocus={() => setEditingId(idea.id)}
+            onChange={(event) => {
+              if (editingId !== idea.id) setEditingId(idea.id);
+              useStudio.getState().beginGesture();
+              useStudio.getState().updateIdea(idea.id, { text: event.target.value });
+            }}
+            onBlur={() => useStudio.getState().endGesture()}
+          />
+          <div className="mt-3 flex items-center gap-2" role="group" aria-label="Shape">
+            <button
+              type="button"
+              aria-label="Box"
+              aria-pressed={idea.shape === "box"}
+              className={cx(
+                "grid size-11 place-items-center rounded-xl",
+                idea.shape === "box" ? "bg-copper text-copper-ink" : "bg-elevated text-ink",
+              )}
+              onClick={() => useStudio.getState().updateIdea(idea.id, { shape: "box" })}
+            >
+              <Square className="size-4" />
+            </button>
+            <button
+              type="button"
+              aria-label="Circle"
+              aria-pressed={idea.shape === "circle"}
+              className={cx(
+                "grid size-11 place-items-center rounded-xl",
+                idea.shape === "circle" ? "bg-copper text-copper-ink" : "bg-elevated text-ink",
+              )}
+              onClick={() => useStudio.getState().updateIdea(idea.id, { shape: "circle" })}
+            >
+              <Circle className="size-4" />
+            </button>
+            <p className="min-w-0 flex-1 text-right text-xs text-muted">
+              {board.mode === "logic" ? "Text shrinks to fit" : `${idea.text.length}/${MAX_TEXT}`}
+            </p>
+          </div>
+        </>
+      )}
+      <div className="mt-3 grid grid-cols-5 gap-2" role="group" aria-label={picture ? "Frame color" : "Color"}>
         {TONES.map((tone) => (
           <button
             key={tone.id}
@@ -538,7 +587,7 @@ export function Inspector({
         }}
       >
         <Trash2 className="size-4" aria-hidden />
-        Delete idea
+        {picture ? "Delete picture" : "Delete idea"}
       </button>
     </aside>
   );

@@ -9,7 +9,8 @@ export type Measure = (text: string, fontSize: number) => number;
 export const EXPORT_FONT = 'Georgia, "Times New Roman", serif';
 const SANS = "Helvetica, Arial, sans-serif";
 const FONT_SIZE = 17;
-const LINE = 23;
+const LEADING = 1.35;
+const MIN_FONT = 9;
 const PAD = 72;
 
 function esc(text: string): string {
@@ -145,20 +146,36 @@ export function buildSvg(
     const shape = circle
       ? `<circle cx="${num(idea.x)}" cy="${num(idea.y)}" r="${num(idea.w / 2)}" fill="${tone.fill}"${outline} filter="url(#fa-shadow)"/>`
       : `<rect x="${num(idea.x - idea.w / 2)}" y="${num(idea.y - idea.h / 2)}" width="${num(idea.w)}" height="${num(idea.h)}" rx="14" fill="${tone.fill}"${outline} filter="url(#fa-shadow)"/>`;
-    const textWidth = circle ? idea.w * 0.72 : idea.w - 32;
-    const room = circle ? idea.w * 0.72 : idea.h - 24;
-    const maxLines = Math.max(1, Math.floor(room / LINE));
-    let lines = wrapLines(idea.text, textWidth, (t) => measure(t, FONT_SIZE));
-    if (!idea.text.trim()) lines = [];
-    if (lines.length > maxLines) {
-      lines = lines.slice(0, maxLines);
-      lines[maxLines - 1] = `${lines[maxLines - 1].replace(/\s+$/, "")}…`;
+    if (idea.image) {
+      const inset = 6;
+      const side = idea.w - inset * 2;
+      const clip = `fa-clip-${ideaParts.length}`;
+      defs.push(
+        `<clipPath id="${clip}"><rect x="${num(idea.x - side / 2)}" y="${num(idea.y - side / 2)}" width="${num(side)}" height="${num(side)}" rx="8"/></clipPath>`,
+      );
+      // "meet" = the whole picture, never cropped or stretched.
+      const picture = `<image href="${idea.image}" x="${num(idea.x - side / 2)}" y="${num(idea.y - side / 2)}" width="${num(side)}" height="${num(side)}" preserveAspectRatio="xMidYMid meet" clip-path="url(#${clip})"/>`;
+      ideaParts.push(`${shape}${picture}`);
+      continue;
     }
-    const top = idea.y - (lines.length * LINE) / 2;
+    const textWidth = circle ? idea.w * 0.72 : idea.w - 32;
+    const fits = (lineCount: number, fs: number) => {
+      const height = lineCount * fs * LEADING;
+      return circle ? Math.hypot(textWidth, height) <= idea.w - 14 : height <= idea.h - 24;
+    };
+    // Largest font (17 down to 9) at which the whole note fits; boxes fitted in the app land on 17.
+    let fontSize = FONT_SIZE;
+    let lines = idea.text.trim() ? wrapLines(idea.text, textWidth, (t) => measure(t, fontSize)) : [];
+    while (lines.length && !fits(lines.length, fontSize) && fontSize > MIN_FONT) {
+      fontSize -= 1;
+      lines = wrapLines(idea.text, textWidth, (t) => measure(t, fontSize));
+    }
+    const lineHeight = fontSize * LEADING;
+    const top = idea.y - (lines.length * lineHeight) / 2;
     const text = lines
       .map(
         (line, i) =>
-          `<text x="${num(idea.x)}" y="${num(top + i * LINE + 16.5)}" text-anchor="middle" font-family='${EXPORT_FONT}' font-size="${FONT_SIZE}" fill="${tone.ink}" xml:space="preserve">${esc(line)}</text>`,
+          `<text x="${num(idea.x)}" y="${num(top + i * lineHeight + fontSize * 0.97)}" text-anchor="middle" font-family='${EXPORT_FONT}' font-size="${fontSize}" fill="${tone.ink}" xml:space="preserve">${esc(line)}</text>`,
       )
       .join("");
     ideaParts.push(`${shape}${text}`);

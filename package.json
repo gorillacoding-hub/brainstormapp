@@ -1,6 +1,6 @@
 {
   "name": "filament-brainstorm",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "description": "A quiet canvas for brainstorming. Place ideas as boxes or circles and link them point to point.",

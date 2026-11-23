@@ -10,7 +10,8 @@ import {
 import { boardFromTemplate, INITIAL_ACTIVE, INITIAL_BOARDS } from "@/lib/brainstorm/templates";
 import { restoreBase, withFit } from "@/lib/brainstorm/fit";
 import { logicSize, pickCell, relayoutLogic } from "@/lib/brainstorm/layout";
-import { BOARD_DEFAULTS, TONES } from "@/lib/brainstorm/types";
+import { notify } from "@/lib/notice";
+import { BOARD_DEFAULTS, IMAGE_SIDE, MAX_TEXT, TONES } from "@/lib/brainstorm/types";
 import { isHex } from "@/lib/brainstorm/color";
 import type {
   Arrow,
@@ -59,8 +60,10 @@ export type StudioState = {
   beginGesture: () => void;
   endGesture: () => void;
   addIdea: (x: number, y: number, shape?: Shape, text?: string) => string;
+  addPicture: (x: number, y: number, image: string) => string;
+  refitAll: () => void;
   moveIdea: (id: string, x: number, y: number) => void;
-  updateIdea: (id: string, patch: Partial<Pick<Idea, "text" | "tone" | "shape" | "full">>) => void;
+  updateIdea: (id: string, patch: Partial<Pick<Idea, "text" | "tone" | "shape">>) => void;
   addArrow: (fromId: string, fromPort: Port, toId: string, toPort: Port) => void;
   updateArrow: (id: string, patch: Partial<Pick<Arrow, "label" | "color">>) => void;
   setMode: (mode: Mode, view: { w: number; h: number }) => void;
@@ -107,6 +110,10 @@ function isTone(value: unknown): value is Tone {
   return TONES.some((tone) => tone.id === value);
 }
 
+function isPicture(value: unknown): value is string {
+  return typeof value === "string" && value.startsWith("data:image/") && value.length < 4_000_000;
+}
+
 function isTemplate(value: unknown): value is Template {
   return value === "free" || value === "boxes" || value === "circles" || value === "tree";
 }
@@ -133,11 +140,11 @@ export function sanitize(data: unknown): Persisted | null {
           y: n.y,
           w: typeof n.w === "number" ? n.w : defaultSize(n.shape).w,
           h: typeof n.h === "number" ? n.h : defaultSize(n.shape).h,
-          text: typeof n.text === "string" ? n.text.slice(0, 400) : "",
+          text: typeof n.text === "string" ? n.text.slice(0, MAX_TEXT) : "",
           shape: n.shape,
           tone: n.tone,
-          ...(n.full === true ? { full: true } : {}),
-          ...(n.full === true && typeof n.baseW === "number" && typeof n.baseH === "number"
+          ...(isPicture(n.image) ? { image: n.image } : {}),
+          ...(typeof n.baseW === "number" && typeof n.baseH === "number"
             ? { baseW: n.baseW, baseH: n.baseH }
             : {}),
         });
@@ -215,6 +222,7 @@ function shapeFor(template: Template, freeShape: Shape): Shape {
 }
 
 function convertIdea(idea: Idea, template: Template): Idea {
+  if (idea.image) return idea;
   if (template === "circles") {
     const d = Math.max(idea.w, idea.h, 120);
     return { ...idea, shape: "circle", w: d, h: d };
@@ -278,6 +286,7 @@ export const useStudio = create<StudioState>((set, get) => {
           history: {},
           gesture: false,
         });
+        get().refitAll();
       } catch {
         /* keep the welcome board */
       }
@@ -373,7 +382,7 @@ export const useStudio = create<StudioState>((set, get) => {
             y: spot.y,
             w: size.w,
             h: size.h,
-            text: text.slice(0, 400),
+            text: text.slice(0, MAX_TEXT),
             shape: nextShape,
             tone,
           },
@@ -381,6 +390,33 @@ export const useStudio = create<StudioState>((set, get) => {
       }));
       set({ selection: { kind: "idea", id }, tool: "select" });
       return id;
+    },
+
+    addPicture: (x, y, image) => {
+      const state = get();
+      const board = currentBoard(state);
+      const logic = board.mode === "logic";
+      const size = logic ? logicSize("box", true) : { w: IMAGE_SIDE, h: IMAGE_SIDE };
+      const spot = logic ? pickCell(board.ideas, null, x, y) : { x: snap(x), y: snap(y) };
+      const id = uid();
+      mutate(true, (current) => ({
+        ...current,
+        ideas: [
+          ...current.ideas,
+          { id, x: spot.x, y: spot.y, w: size.w, h: size.h, text: "", shape: "box", tone: "ink", image },
+        ],
+      }));
+      set({ selection: { kind: "idea", id }, tool: "select" });
+      return id;
+    },
+
+    refitAll: () => {
+      const state = get();
+      set({
+        boards: state.boards.map((board) =>
+          board.mode === "free" ? { ...board, ideas: board.ideas.map((idea) => withFit(idea)) } : board,
+        ),
+      });
     },
 
     moveIdea: (id, x, y) => {
@@ -404,7 +440,8 @@ export const useStudio = create<StudioState>((set, get) => {
           if (idea.id !== id) return idea;
           const flat = restoreBase(idea);
           const next: Idea = { ...flat, ...patch };
-          if (patch.text != null) next.text = patch.text.slice(0, 400);
+          if (flat.image) next.shape = flat.shape;
+          if (patch.text != null) next.text = patch.text.slice(0, MAX_TEXT);
           if (patch.shape === "circle") {
             const d = Math.max(flat.w, flat.h);
             next.w = d;
@@ -414,9 +451,9 @@ export const useStudio = create<StudioState>((set, get) => {
             next.w = Math.max(flat.w + 48, 180);
             next.h = 108;
           }
-          if (patch.full === false) delete next.full;
+          delete next.full;
           if (board.mode === "logic") {
-            const size = logicSize(next.shape);
+            const size = logicSize(next.shape, Boolean(next.image));
             return { ...next, w: size.w, h: size.h };
           }
           return withFit(next);
@@ -661,12 +698,18 @@ export const useStudio = create<StudioState>((set, get) => {
   };
 });
 
+let lastStorageWarning = 0;
+
 export function persistStudio(state: Pick<StudioState, "boards" | "activeId">) {
   try {
     const payload: Persisted = { activeId: state.activeId, boards: state.boards };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
-    /* storage full or blocked — the session still works */
+    const now = Date.now();
+    if (now - lastStorageWarning > 15000) {
+      lastStorageWarning = now;
+      notify("Storage is full - recent changes may be lost on restart. Remove a picture or a saved work.");
+    }
   }
 }
 

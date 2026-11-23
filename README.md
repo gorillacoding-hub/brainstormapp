@@ -8,7 +8,8 @@ Everything is stored locally on your device.
 - Free, Boxes, Circles and Tree board templates
 - Drag, link and pan tools with undo / redo
 - Multiple boards, saved automatically in local storage
-- 10 colors for boxes and circles; a "Full note" switch grows the container so the whole note shows
+- 10 colors for boxes and circles; boxes and circles grow to fit long notes (boxes get wider first, then taller) so text never spills out. In Logic mode the text shrinks to fit instead
+- Import pictures (image button in the toolbar): each lands as a square that shows the whole picture, never cropped or stretched
 - Arrows take their box color (or a color you pick); where arrows merge into one point they blend into a new color
 - 2D or 3D arrows, and any background color
 - Free mode, or Logic mode where everything snaps to one tidy grid at one size; optional guide lines

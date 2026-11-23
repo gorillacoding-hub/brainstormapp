@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { notify } from "@/lib/notice";
 import { uid } from "@/lib/brainstorm/geometry";
 import { sanitize } from "@/lib/brainstorm/store";
 import type { Board } from "@/lib/brainstorm/types";
@@ -20,7 +21,7 @@ function persist(works: SavedWork[]) {
   try {
     localStorage.setItem(KEY, JSON.stringify(works));
   } catch {
-    // storage full or unavailable - works stay in memory for this session
+    notify("Storage is full - this work is only kept until the app closes.");
   }
 }
 

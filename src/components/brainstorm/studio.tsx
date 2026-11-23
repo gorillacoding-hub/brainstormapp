@@ -6,10 +6,36 @@ import { SettingsPanel } from "@/components/brainstorm/settings-panel";
 import { spawnAround } from "@/lib/brainstorm/geometry";
 import { useSaved } from "@/lib/brainstorm/saved";
 import { persistStudio, readView, useStudio } from "@/lib/brainstorm/store";
+import { NOTICE_EVENT } from "@/lib/notice";
 
 function isTyping(target: EventTarget | null) {
   if (!(target instanceof HTMLElement)) return false;
   return target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable;
+}
+
+function Notice() {
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    let timer = 0;
+    const onNotice = (event: Event) => {
+      setMessage(String((event as CustomEvent<string>).detail ?? ""));
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setMessage(""), 4500);
+    };
+    window.addEventListener(NOTICE_EVENT, onNotice);
+    return () => {
+      window.removeEventListener(NOTICE_EVENT, onNotice);
+      window.clearTimeout(timer);
+    };
+  }, []);
+  if (!message) return null;
+  return (
+    <p role="status" className="pointer-events-none absolute inset-x-3 bottom-36 z-50 flex justify-center md:bottom-6">
+      <span className="max-w-sm rounded-full bg-elevated px-4 py-2 text-center text-xs leading-snug text-ink ring-1 ring-line">
+        {message}
+      </span>
+    </p>
+  );
 }
 
 export function Studio() {
@@ -108,6 +134,7 @@ export function Studio() {
       <Hint />
       <Inspector editingId={editingId} setEditingId={setEditingId} dragging={dragging} />
       <Welcome setEditingId={setEditingId} />
+      <Notice />
     </main>
   );
 }

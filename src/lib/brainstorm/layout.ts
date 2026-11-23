@@ -10,7 +10,11 @@ export const LOGIC_SIZE: Record<Shape, { w: number; h: number }> = {
 /** Outline drawn for each slot when guide lines are on. */
 export const GUIDE_SLOT = { w: LOGIC_CELL.w - 32, h: LOGIC_CELL.h - 32 };
 
-export function logicSize(shape: Shape): { w: number; h: number } {
+/** Pictures are squares; this fits inside one guide slot. */
+export const LOGIC_IMAGE = { w: 136, h: 136 };
+
+export function logicSize(shape: Shape, image?: boolean): { w: number; h: number } {
+  if (image) return LOGIC_IMAGE;
   return LOGIC_SIZE[shape];
 }
 
@@ -65,7 +69,7 @@ export function relayoutLogic(ideas: Idea[]): Idea[] {
   const byId = new Map<string, Idea>();
   for (const original of order) {
     const idea = restoreBase(original);
-    const size = logicSize(idea.shape);
+    const size = logicSize(idea.shape, Boolean(idea.image));
     const spot = pickCell(placed, idea.id, idea.x, idea.y);
     const next: Idea = { ...idea, x: spot.x, y: spot.y, w: size.w, h: size.h };
     placed.push(next);

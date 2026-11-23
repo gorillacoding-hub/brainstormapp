@@ -26,9 +26,11 @@ export type Idea = {
   text: string;
   shape: Shape;
   tone: Tone;
-  /** Grow the container so the whole note shows. */
+  /** Legacy flag from the old "Full note" switch. Containers now always fit their text. */
   full?: boolean;
-  /** Size before "full note" growth, restored when it is switched off. */
+  /** Imported picture (data URL). Picture ideas are squares that show the whole image. */
+  image?: string;
+  /** Size before text growth, restored when the board goes to Logic mode. */
   baseW?: number;
   baseH?: number;
 };
@@ -69,6 +71,11 @@ export type Selection =
   | { kind: "idea"; id: string }
   | { kind: "arrow"; id: string }
   | null;
+
+/** Longest note a box or circle accepts. */
+export const MAX_TEXT = 1000;
+/** Side of a freshly imported picture (free mode). */
+export const IMAGE_SIDE = 180;
 
 export const DEFAULT_BACKGROUND = "#12110f";
 export const COPPER = "#e07a3d";
